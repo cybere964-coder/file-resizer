@@ -1,0 +1,5 @@
+flask
+pillow
+pypdf
+pypdfium2
+gunicorn

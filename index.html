@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPG & PDF Size Tool</title>
+    <style>
+        * { box-sizing: border-box; font-family: sans-serif; }
+        body {
+            background: #0b0f19;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 440px;
+        }
+        h2 { text-align: center; color: #00f0ff; margin-top: 0; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 6px; font-size: 14px; color: #94a3b8; }
+        .drop-zone {
+            border: 2px dashed #334155;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #00f0ff;
+            background: #0f2942;
+        }
+        input[type="file"] { display: none; }
+        .size-row { display: flex; gap: 10px; }
+        .size-row input { flex: 1; }
+        .size-row select { width: 90px; }
+        input[type="number"], select {
+            width: 100%;
+            padding: 11px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+        input:focus, select:focus { border-color: #00f0ff; }
+        .info-box {
+            background: #1e293b;
+            border-left: 3px solid #00f0ff;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #38bdf8;
+            margin-bottom: 16px;
+            display: none;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(90deg, #00f0ff, #0077ff);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .msg { margin-top: 14px; text-align: center; font-size: 14px; }
+        .error { color: #f87171; }
+        .success { color: #4ade80; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>JPG & PDF Size Tool</h2>
+    <form id="uploadForm">
+        <div class="form-group">
+            <label>ফাইল সিলেক্ট করুন (.JPG বা .PDF)</label>
+            <div class="drop-zone" id="dropZone">
+                <div id="dropText">ফাইল ড্র্যাগ করুন বা ট্যাপ করে সিলেক্ট করুন</div>
+            </div>
+            <input type="file" id="fileInput" accept=".jpg,.jpeg,.pdf" required>
+        </div>
+
+        <div class="info-box" id="fileInfo"></div>
+
+        <div class="form-group">
+            <label>কাজের ধরন</label>
+            <select id="modeSelect">
+                <option value="compress">Compress (সাইজ কমান)</option>
+                <option value="increase">Increase (সাইজ বাড়ান)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>টার্গেট সাইজ</label>
+            <div class="size-row">
+                <input type="number" id="targetSize" placeholder="যেমন: 200 বা 1.5" min="0.01" step="any" required>
+                <select id="unitSelect">
+                    <option value="KB">KB</option>
+                    <option value="MB">MB</option>
+                </select>
+            </div>
+        </div>
+
+        <button type="submit" id="submitBtn">প্রসেস ও ডাউনলোড করুন</button>
+        <div class="msg" id="statusMsg"></div>
+    </form>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const dropText = document.getElementById('dropText');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const form = document.getElementById('uploadForm');
+const statusMsg = document.getElementById('statusMsg');
+const submitBtn = document.getElementById('submitBtn');
+const targetSizeInput = document.getElementById('targetSize');
+const unitSelect = document.getElementById('unitSelect');
+
+function formatSize(bytes) {
+    const kb = bytes / 1024;
+    return kb >= 1024 ? `${kb.toFixed(2)} KB (${(kb / 1024).toFixed(2)} MB)` : `${kb.toFixed(2)} KB`;
+}
+
+function setFile(file) {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith('.jpg') && !name.endsWith('.jpeg') && !name.endsWith('.pdf')) {
+        statusMsg.className = 'msg error';
+        statusMsg.textContent = 'শুধুমাত্র .JPG, .JPEG বা .PDF ফাইল দিন!';
+        return;
+    }
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    statusMsg.textContent = '';
+    dropText.textContent = `সিলেক্টেড: ${file.name}`;
+    fileInfo.style.display = 'block';
+    fileInfo.textContent = `বর্তমান সাইজ: ${formatSize(file.size)}`;
+}
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => fileInput.files[0] && setFile(fileInput.files[0]));
+
+['dragenter', 'dragover'].forEach(ev => {
+    dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+    dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+});
+dropZone.addEventListener('drop', e => {
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+
+form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const file = fileInput.files[0];
+    const val = parseFloat(targetSizeInput.value);
+    if (!file || isNaN(val) || val <= 0) return;
+
+    const targetKb = unitSelect.value === 'MB' ? val * 1024 : val;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('mode', document.getElementById('modeSelect').value);
+    fd.append('target_kb', targetKb);
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'প্রসেসিং হচ্ছে...';
+    statusMsg.textContent = '';
+
+    try {
+        const res = await fetch('/process', { method: 'POST', body: fd });
+        if (!res.ok) {
+            const err = await res.json();
+            statusMsg.className = 'msg error';
+            statusMsg.textContent = err.error || 'সমস্যা হয়েছে!';
+        } else {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${document.getElementById('modeSelect').value}_${file.name}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            statusMsg.className = 'msg success';
+            statusMsg.textContent = `সফল! নতুন সাইজ: ${formatSize(blob.size)}`;
+        }
+    } catch {
+        statusMsg.className = 'msg error';
+        statusMsg.textContent = 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না!';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'প্রসেস ও ডাউনলোড করুন';
+    }
+});
+</script>
+</body>
+</html>
