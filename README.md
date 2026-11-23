@@ -7,6 +7,7 @@ A lightweight dark-themed Flask web application to compress or increase the file
 - **KB & MB Unit Selector:** Set target sizes in either KB or MB.
 - **Drag & Drop Upload:** Supports drag-and-drop as well as file picker upload.
 - **In-Memory Processing:** Processes files in memory without storing user uploads on disk.
+_ **The size of all multiple files will be reduced or increased.
 
 ## Project Structure
 ```text
