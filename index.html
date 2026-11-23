@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JPG & PDF Size Tool</title>
+    <title>JPG & PDF Size Tool - Batch</title>
     <style>
         * { box-sizing: border-box; font-family: sans-serif; }
         body {
@@ -23,7 +23,7 @@
             border-radius: 16px;
             padding: 24px;
             width: 100%;
-            max-width: 440px;
+            max-width: 480px;
         }
         h2 { text-align: center; color: #00f0ff; margin-top: 0; }
         .form-group { margin-bottom: 16px; }
@@ -56,16 +56,29 @@
             outline: none;
         }
         input:focus, select:focus { border-color: #00f0ff; }
-        .info-box {
+        .file-list {
             background: #1e293b;
             border-left: 3px solid #00f0ff;
             padding: 10px 12px;
             border-radius: 8px;
             font-size: 13px;
-            color: #38bdf8;
+            color: #cbd5e1;
             margin-bottom: 16px;
             display: none;
+            max-height: 160px;
+            overflow-y: auto;
         }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .file-item:last-child { border-bottom: none; }
+        .status-ok { color: #4ade80; }
+        .status-err { color: #f87171; }
+        .status-wait { color: #38bdf8; }
         button {
             width: 100%;
             padding: 12px;
@@ -88,14 +101,14 @@
     <h2>JPG & PDF Size Tool</h2>
     <form id="uploadForm">
         <div class="form-group">
-            <label>ফাইল সিলেক্ট করুন (.JPG বা .PDF)</label>
+            <label>একাধিক ফাইল সিলেক্ট করুন (.JPG বা .PDF)</label>
             <div class="drop-zone" id="dropZone">
-                <div id="dropText">ফাইল ড্র্যাগ করুন বা ট্যাপ করে সিলেক্ট করুন</div>
+                <div id="dropText">এক বা একাধিক ফাইল ড্র্যাগ করুন বা ট্যাপ করে সিলেক্ট করুন</div>
             </div>
-            <input type="file" id="fileInput" accept=".jpg,.jpeg,.pdf" required>
+            <input type="file" id="fileInput" accept=".jpg,.jpeg,.pdf" multiple required>
         </div>
 
-        <div class="info-box" id="fileInfo"></div>
+        <div class="file-list" id="fileList"></div>
 
         <div class="form-group">
             <label>কাজের ধরন</label>
@@ -106,7 +119,7 @@
         </div>
 
         <div class="form-group">
-            <label>টার্গেট সাইজ</label>
+            <label>টার্গেট সাইজ (প্রতিটি ফাইলের জন্য)</label>
             <div class="size-row">
                 <input type="number" id="targetSize" placeholder="যেমন: 200 বা 1.5" min="0.01" step="any" required>
                 <select id="unitSelect">
@@ -116,7 +129,7 @@
             </div>
         </div>
 
-        <button type="submit" id="submitBtn">প্রসেস ও ডাউনলোড করুন</button>
+        <button type="submit" id="submitBtn">সব ফাইল প্রসেস ও ডাউনলোড করুন</button>
         <div class="msg" id="statusMsg"></div>
     </form>
 </div>
@@ -125,37 +138,57 @@
 const dropZone = document.getElementById('dropZone');
 const dropText = document.getElementById('dropText');
 const fileInput = document.getElementById('fileInput');
-const fileInfo = document.getElementById('fileInfo');
+const fileList = document.getElementById('fileList');
 const form = document.getElementById('uploadForm');
 const statusMsg = document.getElementById('statusMsg');
 const submitBtn = document.getElementById('submitBtn');
 const targetSizeInput = document.getElementById('targetSize');
 const unitSelect = document.getElementById('unitSelect');
 
+let selectedFiles = [];
+
 function formatSize(bytes) {
     const kb = bytes / 1024;
     return kb >= 1024 ? `${kb.toFixed(2)} KB (${(kb / 1024).toFixed(2)} MB)` : `${kb.toFixed(2)} KB`;
 }
 
-function setFile(file) {
-    if (!file) return;
+function isValidFile(file) {
     const name = file.name.toLowerCase();
-    if (!name.endsWith('.jpg') && !name.endsWith('.jpeg') && !name.endsWith('.pdf')) {
-        statusMsg.className = 'msg error';
-        statusMsg.textContent = 'শুধুমাত্র .JPG, .JPEG বা .PDF ফাইল দিন!';
+    return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.pdf');
+}
+
+function renderFileList() {
+    if (selectedFiles.length === 0) {
+        fileList.style.display = 'none';
+        fileList.innerHTML = '';
+        dropText.textContent = 'এক বা একাধিক ফাইল ড্র্যাগ করুন বা ট্যাপ করে সিলেক্ট করুন';
         return;
     }
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fileInput.files = dt.files;
-    statusMsg.textContent = '';
-    dropText.textContent = `সিলেক্টেড: ${file.name}`;
-    fileInfo.style.display = 'block';
-    fileInfo.textContent = `বর্তমান সাইজ: ${formatSize(file.size)}`;
+    dropText.textContent = `${selectedFiles.length}টি ফাইল সিলেক্টেড`;
+    fileList.style.display = 'block';
+    fileList.innerHTML = selectedFiles.map((file, idx) => `
+        <div class="file-item" id="row-${idx}">
+            <span>${file.name} (${formatSize(file.size)})</span>
+            <span class="status-wait" id="st-${idx}">প্রস্তুত</span>
+        </div>
+    `).join('');
+}
+
+function handleFiles(fileListObj) {
+    const incoming = Array.from(fileListObj || []);
+    const valid = incoming.filter(isValidFile);
+    if (valid.length !== incoming.length) {
+        statusMsg.className = 'msg error';
+        statusMsg.textContent = 'অসমর্থিত ফাইল বাদ দেওয়া হয়েছে (শুধুমাত্র .JPG, .JPEG, .PDF)।';
+    } else {
+        statusMsg.textContent = '';
+    }
+    selectedFiles = valid;
+    renderFileList();
 }
 
 dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => fileInput.files[0] && setFile(fileInput.files[0]));
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
 
 ['dragenter', 'dragover'].forEach(ev => {
     dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -164,51 +197,74 @@ fileInput.addEventListener('change', () => fileInput.files[0] && setFile(fileInp
     dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
 });
 dropZone.addEventListener('drop', e => {
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+    }
 });
 
 form.addEventListener('submit', async e => {
     e.preventDefault();
-    const file = fileInput.files[0];
     const val = parseFloat(targetSizeInput.value);
-    if (!file || isNaN(val) || val <= 0) return;
+    if (selectedFiles.length === 0 || isNaN(val) || val <= 0) return;
 
+    const mode = document.getElementById('modeSelect').value;
     const targetKb = unitSelect.value === 'MB' ? val * 1024 : val;
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('mode', document.getElementById('modeSelect').value);
-    fd.append('target_kb', targetKb);
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'প্রসেসিং হচ্ছে...';
     statusMsg.textContent = '';
+    let successCount = 0;
 
-    try {
-        const res = await fetch('/process', { method: 'POST', body: fd });
-        if (!res.ok) {
-            const err = await res.json();
-            statusMsg.className = 'msg error';
-            statusMsg.textContent = err.error || 'সমস্যা হয়েছে!';
-        } else {
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${document.getElementById('modeSelect').value}_${file.name}`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            statusMsg.className = 'msg success';
-            statusMsg.textContent = `সফল! নতুন সাইজ: ${formatSize(blob.size)}`;
+    for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const stEl = document.getElementById(`st-${i}`);
+        submitBtn.textContent = `প্রসেসিং (${i + 1}/${selectedFiles.length})...`;
+        if (stEl) {
+            stEl.className = 'status-wait';
+            stEl.textContent = 'চলছে...';
         }
-    } catch {
-        statusMsg.className = 'msg error';
-        statusMsg.textContent = 'সার্ভারের সাথে সংযোগ করা যাচ্ছে না!';
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'প্রসেস ও ডাউনলোড করুন';
+
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('mode', mode);
+        fd.append('target_kb', targetKb);
+
+        try {
+            const res = await fetch('/process', { method: 'POST', body: fd });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                if (stEl) {
+                    stEl.className = 'status-err';
+                    stEl.textContent = err.error || 'ব্যর্থ';
+                }
+            } else {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${mode}_${file.name}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                successCount++;
+                if (stEl) {
+                    stEl.className = 'status-ok';
+                    stEl.textContent = `${formatSize(blob.size)}`;
+                }
+            }
+        } catch {
+            if (stEl) {
+                stEl.className = 'status-err';
+                stEl.textContent = 'নেটওয়ার্ক ত্রুটি';
+            }
+        }
     }
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'সব ফাইল প্রসেস ও ডাউনলোড করুন';
+    statusMsg.className = successCount > 0 ? 'msg success' : 'msg error';
+    statusMsg.textContent = `${selectedFiles.length}টির মধ্যে ${successCount}টি ফাইল সফলভাবে প্রসেস হয়েছে।`;
 });
 </script>
 </body>
